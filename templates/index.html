@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>NYC Room Type Predictor</title>
+<style>
+:root{
+  --bg:#eef1f4; --panel:#ffffff; --ink:#14181d; --muted:#5d6670; --line:#d3d9df;
+  --accent:#0039a6; --e:#0039a6; --p:#ee352e; --s:#00933c; --err:#b3261e;
+  --font:"Helvetica Neue",Helvetica,Arial,sans-serif;
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#101316;--panel:#1a1f24;--ink:#f1f3f5;--muted:#9aa4ae;--line:#2d353d;--accent:#6c93f0;--e:#6c93f0;--p:#ff6b64;--s:#3ecf74;--err:#ff8a80}
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--font);line-height:1.5}
+.wrap{max-width:980px;margin:0 auto;padding:32px 20px 56px}
+header{display:flex;align-items:center;gap:14px;margin-bottom:24px}
+.bullet{width:44px;height:44px;border-radius:50%;background:var(--ink);color:var(--bg);display:grid;place-items:center;font-weight:700;font-size:20px;flex:none}
+h1{font-size:26px;line-height:1.15;margin:0;font-weight:700;letter-spacing:-.01em}
+header p{margin:2px 0 0;color:var(--muted);font-size:14px}
+.grid{display:grid;grid-template-columns:1.25fr 1fr;gap:20px;align-items:start}
+@media(max-width:780px){.grid{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:22px}
+.panel h2{font-size:16px;margin:0 0 14px}
+.fields{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+label{display:block;font-size:13px;font-weight:600;margin-bottom:4px}
+.hint{font-weight:400;color:var(--muted)}
+input,select{width:100%;font:inherit;font-size:15px;padding:9px 10px;border:1px solid var(--line);border-radius:6px;background:var(--bg);color:var(--ink)}
+input:focus,select:focus,button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.actions{display:flex;gap:10px;margin-top:20px;flex-wrap:wrap}
+button{font:inherit;font-size:15px;font-weight:600;padding:10px 18px;border-radius:6px;cursor:pointer;border:1px solid var(--line);background:transparent;color:var(--ink)}
+button.primary{background:var(--accent);border-color:var(--accent);color:#fff}
+@media(prefers-color-scheme:dark){button.primary{color:#0b1220}}
+.empty{color:var(--muted);font-size:15px;margin:0}
+.result-head{display:flex;align-items:center;gap:14px;margin-bottom:18px}
+.badge{width:56px;height:56px;border-radius:50%;display:grid;place-items:center;color:#fff;font-weight:700;font-size:26px;flex:none}
+@media(prefers-color-scheme:dark){.badge{color:#0b1220}}
+.result-head small{display:block;color:var(--muted);font-size:13px}
+.result-head strong{font-size:22px;line-height:1.15}
+.bar{margin-bottom:12px}
+.bar .row{display:flex;justify-content:space-between;font-size:14px;margin-bottom:4px}
+.track{height:10px;background:var(--bg);border-radius:5px;overflow:hidden}
+.fill{height:100%;border-radius:5px}
+.error{color:var(--err);font-size:14px;margin:0 0 6px}
+</style>
+</head>
+<body>
+{% set colors = {'Entire home/apt': 'var(--e)', 'Private room': 'var(--p)', 'Shared room': 'var(--s)'} %}
+{% set letters = {'Entire home/apt': 'E', 'Private room': 'P', 'Shared room': 'S'} %}
+{% set form = form or {} %}
+<div class="wrap">
+  <header>
+    <div class="bullet" aria-hidden="true">R</div>
+    <div>
+      <h1>NYC room type predictor</h1>
+      <p>Enter listing details to see whether the model predicts an entire home, private room or shared room.</p>
+    </div>
+  </header>
+
+  <div class="grid">
+    <section class="panel" aria-label="Listing details">
+      <h2>Listing details</h2>
+      <form method="post" action="/predict">
+        <div class="fields">
+          <div>
+            <label for="neighbourhood_group">Borough</label>
+            <select id="neighbourhood_group" name="neighbourhood_group" required>
+              {% for b in ['Manhattan', 'Brooklyn', 'Queens', 'Bronx', 'Staten Island'] %}
+              <option value="{{ b }}" {{ 'selected' if form.get('neighbourhood_group') == b }}>{{ b }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div>
+            <label for="neighbourhood">Neighbourhood</label>
+            <input id="neighbourhood" name="neighbourhood" list="hoods" placeholder="e.g. Harlem" value="{{ form.get('neighbourhood', '') }}" required>
+            <datalist id="hoods">
+              <option>Harlem</option><option>Midtown</option><option>Upper West Side</option>
+              <option>East Village</option><option>Williamsburg</option><option>Bedford-Stuyvesant</option>
+              <option>Bushwick</option><option>Astoria</option><option>Flushing</option>
+            </datalist>
+          </div>
+          <div>
+            <label for="latitude">Latitude</label>
+            <input id="latitude" name="latitude" type="number" step="any" placeholder="40.7128" value="{{ form.get('latitude', '') }}" required>
+          </div>
+          <div>
+            <label for="longitude">Longitude</label>
+            <input id="longitude" name="longitude" type="number" step="any" placeholder="-74.0060" value="{{ form.get('longitude', '') }}" required>
+          </div>
+          <div>
+            <label for="price">Price per night <span class="hint">(USD)</span></label>
+            <input id="price" name="price" type="number" step="0.01" min="0" placeholder="120" value="{{ form.get('price', '') }}" required>
+          </div>
+          <div>
+            <label for="minimum_nights">Minimum nights</label>
+            <input id="minimum_nights" name="minimum_nights" type="number" step="1" min="1" placeholder="2" value="{{ form.get('minimum_nights', '') }}" required>
+          </div>
+          <div>
+            <label for="number_of_reviews">Number of reviews</label>
+            <input id="number_of_reviews" name="number_of_reviews" type="number" step="1" min="0" placeholder="25" value="{{ form.get('number_of_reviews', '') }}" required>
+          </div>
+          <div>
+            <label for="reviews_per_month">Reviews per month</label>
+            <input id="reviews_per_month" name="reviews_per_month" type="number" step="any" min="0" placeholder="1.2" value="{{ form.get('reviews_per_month', '') }}" required>
+          </div>
+          <div>
+            <label for="calculated_host_listings_count">Host listings</label>
+            <input id="calculated_host_listings_count" name="calculated_host_listings_count" type="number" step="any" min="0" placeholder="1" value="{{ form.get('calculated_host_listings_count', '') }}" required>
+          </div>
+          <div>
+            <label for="availability_365">Available days per year</label>
+            <input id="availability_365" name="availability_365" type="number" step="1" min="0" max="365" placeholder="180" value="{{ form.get('availability_365', '') }}" required>
+          </div>
+        </div>
+        <div class="actions">
+          <button class="primary" type="submit">Predict room type</button>
+          <a href="/predict"><button type="button">Clear</button></a>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-live="polite" aria-label="Prediction">
+      <h2>Prediction</h2>
+      {% if errors %}
+        {% for e in errors %}<p class="error">{{ e }}</p>{% endfor %}
+      {% elif room_type %}
+        <div class="result-head">
+          <div class="badge" style="background:{{ colors.get(room_type, 'var(--accent)') }}">{{ letters.get(room_type, '?') }}</div>
+          <div><small>Predicted room type</small><strong>{{ room_type }}</strong></div>
+        </div>
+        {% for name, p in probability.items() | sort(attribute='1', reverse=true) %}
+        <div class="bar">
+          <div class="row"><span>{{ name }}</span><span>{{ (p * 100) | round | int }}%</span></div>
+          <div class="track"><div class="fill" style="width:{{ (p * 100) | round(1) }}%;background:{{ colors.get(name, 'var(--accent)') }}"></div></div>
+        </div>
+        {% endfor %}
+      {% else %}
+        <p class="empty">Fill in the listing details and select Predict room type.</p>
+      {% endif %}
+    </section>
+  </div>
+</div>
+</body>
+</html>
